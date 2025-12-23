@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Utility Tracker (File System)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- jsPDF & AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .tab-btn.active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: 600; }
+        .tab-btn { color: #64748b; font-weight: 500; }
+        .modal { background-color: rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+
+    <!-- Navbar -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-2 text-blue-600 font-bold text-xl">
+                    <i class="fa-solid fa-chart-pie"></i> UtilityTracker
+                </div>
+                <div class="flex space-x-4">
+                    <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn px-3 py-2 text-sm focus:outline-none active">Dashboard</button>
+                    <button onclick="switchTab('add-bill')" id="tab-add-bill" class="tab-btn px-3 py-2 text-sm focus:outline-none">Add Bill</button>
+                    <button onclick="switchTab('people')" id="tab-people" class="tab-btn px-3 py-2 text-sm focus:outline-none">People</button>
+                    <button onclick="switchTab('settings')" id="tab-settings" class="tab-btn px-3 py-2 text-sm focus:outline-none text-orange-600"><i class="fa-solid fa-floppy-disk mr-1"></i>Data</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-4xl mx-auto p-4 mt-4">
+
+        <!-- VIEW: DASHBOARD -->
+        <div id="view-dashboard" class="space-y-6">
+            <div class="flex justify-between items-end">
+                <h2 class="text-2xl font-bold text-slate-800">Active Bills</h2>
+                <button onclick="switchTab('add-bill')" class="text-sm bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">
+                    <i class="fa-solid fa-plus mr-1"></i> New Bill
+                </button>
+            </div>
+            <div id="bills-list" class="space-y-4"></div>
+        </div>
+
+        <!-- VIEW: ADD BILL -->
+        <div id="view-add-bill" class="hidden bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-xl font-bold text-slate-800 mb-6">Create New Bill</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Bill Name</label>
+                    <input type="text" id="new-bill-name" placeholder="e.g. Dec Hydro" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Total Amount ($)</label>
+                    <input type="number" id="new-bill-total" placeholder="0.00" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <input type="date" id="new-bill-date" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-sm font-medium text-gray-700">Select Payers & Splits</label>
+                    <div class="text-xs space-x-2">
+                        <button onclick="applySplitPreset('even')" class="text-blue-600 hover:underline">Split Evenly</button>
+                        <span class="text-gray-300">|</span>
+                        <button onclick="applySplitPreset('4060')" class="text-blue-600 hover:underline">40/60</button>
+                    </div>
+                </div>
+                <div id="split-participants" class="space-y-2 border p-4 rounded-lg bg-gray-50 max-h-60 overflow-y-auto"></div>
+                <div class="flex justify-end mt-2">
+                    <span id="split-total-check" class="text-sm font-bold text-red-500">Total: 0%</span>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="switchTab('dashboard')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button onclick="saveBill()" class="px-6 py-2 bg-green-600 text-white font-bold rounded hover:bg-green-700 shadow">Save Bill</button>
+            </div>
+        </div>
+
+        <!-- VIEW: PEOPLE MANAGER -->
+        <div id="view-people" class="hidden bg-white p-6 rounded-xl shadow-md max-w-lg mx-auto">
+            <h2 class="text-xl font-bold text-slate-800 mb-4">Manage People</h2>
+            <div class="flex gap-2 mb-6">
+                <input type="text" id="new-person-name" placeholder="Enter Name" class="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                <button onclick="addPerson()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add</button>
+            </div>
+            <ul id="people-list" class="divide-y divide-gray-100"></ul>
+        </div>
+
+        <!-- VIEW: DATA / SETTINGS (NEW) -->
+        <div id="view-settings" class="hidden bg-white p-6 rounded-xl shadow-md max-w-xl mx-auto">
+            <h2 class="text-xl font-bold text-slate-800 mb-4"><i class="fa-solid fa-database mr-2"></i>Data Management</h2>
+            <p class="text-sm text-gray-600 mb-6">
+                Move your data between devices securely.
+            </p>
+
+            <div class="space-y-6">
+                <!-- METHOD 1: EMAIL (COPY/PASTE) -->
+                <div class="border p-4 rounded-lg bg-indigo-50 border-indigo-100">
+                    <h3 class="font-bold text-indigo-800 mb-2">Method 1: Email Transfer (Easiest)</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-xs text-indigo-600 mb-2">1. Click copy, then PASTE into email body.</p>
+                            <button onclick="copyToEmail()" class="w-full bg-indigo-600 text-white px-3 py-2 rounded font-bold hover:bg-indigo-700 text-sm">
+                                <i class="fa-solid fa-envelope mr-2"></i>Copy & Open Email
+                            </button>
+                        </div>
+                        <div>
+                            <p class="text-xs text-indigo-600 mb-2">2. Paste code from email here & Load.</p>
+                            <textarea id="paste-import-area" placeholder="Paste data here..." class="w-full p-2 text-xs border rounded h-16"></textarea>
+                            <button onclick="importFromText()" class="w-full mt-2 bg-white border border-indigo-200 text-indigo-700 px-3 py-1 rounded font-bold hover:bg-indigo-50 text-xs">
+                                Load from Text
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- METHOD 2: FILE -->
+                <div class="border p-4 rounded-lg bg-gray-50 border-gray-200">
+                    <h3 class="font-bold text-gray-800 mb-2">Method 2: File Backup</h3>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button onclick="exportData()" class="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded font-medium hover:bg-gray-100 text-sm">
+                            <i class="fa-solid fa-download mr-2"></i>Download File
+                        </button>
+                        <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(this)">
+                        <button onclick="document.getElementById('import-file').click()" class="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded font-medium hover:bg-gray-100 text-sm">
+                            <i class="fa-solid fa-upload mr-2"></i>Upload File
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Print Reports -->
+                 <div class="border-t pt-4">
+                    <h3 class="font-bold text-gray-800 mb-2">Monthly Reports</h3>
+                    <div class="flex gap-2">
+                        <input type="month" id="report-month" class="p-2 border rounded">
+                        <button onclick="generateReport()" class="bg-slate-800 text-white px-4 py-2 rounded font-bold hover:bg-slate-900 text-sm">
+                            <i class="fa-solid fa-print mr-2"></i>Print PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- NOTIFICATION SYSTEM (Replaces Alert/Confirm) ---
+        function showStatus(msg, isError = false) {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white font-bold z-[100] ${isError ? 'bg-red-600' : 'bg-green-600'}`;
+            statusDiv.innerText = msg;
+            document.body.appendChild(statusDiv);
+            setTimeout(() => statusDiv.remove(), 3000);
+        }
+
+        // --- DATA STORE ---
+        let appData = {
+            people: [],
+            bills: [] 
+        };
+
+        // --- EXPORT / IMPORT LOGIC ---
+        
+        // 1. EMAIL COPY METHOD
+        function copyToEmail() {
+            const dataStr = JSON.stringify(appData);
+            
+            // Temporary text box to ensure copy works on local files (file://)
+            const textArea = document.createElement("textarea");
+            textArea.value = dataStr;
+            textArea.style.position = "fixed"; // Prevent scrolling
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    const subject = "Utility Tracker Backup Data";
+                    const body = "PASTE_DATA_HERE"; 
+                    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    showStatus("Data Copied! Paste into Email.");
+                } else {
+                    showStatus("Copy failed. Try Download File.", true);
+                }
+            } catch (err) {
+                showStatus("Copy failed. Try Download File.", true);
+            }
+            
+            document.body.removeChild(textArea);
+        }
+
+        function importFromText() {
+            const text = document.getElementById('paste-import-area').value.trim();
+            if(!text) { showStatus("Please paste data first.", true); return; }
+            try {
+                const content = JSON.parse(text);
+                if (Array.isArray(content.people) && Array.isArray(content.bills)) {
+                    // Removed confirm()
+                    appData = content;
+                    saveData();
+                    showStatus("Data Loaded Successfully!");
+                    document.getElementById('paste-import-area').value = '';
+                    setTimeout(() => switchTab('dashboard'), 1000);
+                } else {
+                    showStatus("Invalid Data Format.", true);
+                }
+            } catch (e) {
+                showStatus("Invalid Text. Check your paste.", true);
+            }
+        }
+
+        // 2. FILE METHOD
+        function exportData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
+            const downloadAnchorNode = document.createElement('a');
+            const date = new Date().toISOString().slice(0,10);
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `utility_backup_${date}.json`);
+            document.body.appendChild(downloadAnchorNode); 
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            showStatus("Backup Downloaded!");
+        }
+
+        function importData(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = JSON.parse(e.target.result);
+                    if (Array.isArray(content.people) && Array.isArray(content.bills)) {
+                        // Removed confirm()
+                        appData = content;
+                        saveData();
+                        showStatus("File Loaded Successfully!");
+                        setTimeout(() => switchTab('dashboard'), 1000);
+                    } else { showStatus("Invalid File Format.", true); }
+                } catch (err) { showStatus("Error reading file.", true); }
+            };
+            reader.readAsText(file);
+            input.value = ''; 
+        }
+
+        // --- INIT ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            document.getElementById('new-bill-date').valueAsDate = new Date();
+            const now = new Date();
+            document.getElementById('report-month').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            renderPeopleList();
+            renderDashboard();
+        });
+
+        function loadData() {
+            const saved = localStorage.getItem('utilityTrackerData_file_v1');
+            if (saved) appData = JSON.parse(saved);
+        }
+
+        function saveData() {
+            localStorage.setItem('utilityTrackerData_file_v1', JSON.stringify(appData));
+            renderDashboard(); 
+        }
+
+        // --- NAVIGATION ---
+        function switchTab(tabId) {
+            ['dashboard', 'add-bill', 'people', 'settings'].forEach(id => {
+                const el = document.getElementById(`view-${id}`);
+                if(el) el.classList.add('hidden');
+                
+                const btn = document.getElementById(`tab-${id}`);
+                if(btn) btn.classList.remove('active');
+            });
+            
+            const view = document.getElementById(`view-${tabId}`);
+            if(view) view.classList.remove('hidden');
+            
+            const tab = document.getElementById(`tab-${tabId}`);
+            if(tab) tab.classList.add('active');
+
+            if (tabId === 'add-bill') initNewBillForm();
+        }
+
+        // --- PEOPLE MANAGER ---
+        function addPerson() {
+            const input = document.getElementById('new-person-name');
+            const name = input.value.trim();
+            if (name && !appData.people.includes(name)) {
+                appData.people.push(name);
+                saveData();
+                renderPeopleList();
+                input.value = '';
+                showStatus("Person Added!");
+            }
+        }
+
+        function deletePerson(name) {
+            // Replaced confirm with direct action for simplicity
+            appData.people = appData.people.filter(p => p !== name);
+            saveData();
+            renderPeopleList();
+            showStatus("Person Removed.");
+        }
+
+        function renderPeopleList() {
+            const list = document.getElementById('people-list');
+            if (appData.people.length === 0) {
+                list.innerHTML = '<li class="py-4 text-center text-gray-400 italic">No people added yet.</li>';
+                return;
+            }
+            list.innerHTML = appData.people.map(p => `
+                <li class="flex justify-between items-center py-3">
+                    <span class="font-medium text-gray-700">${p}</span>
+                    <button onclick="deletePerson('${p}')" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button>
+                </li>
+            `).join('');
+        }
+
+        // --- BILL CREATION ---
+        function initNewBillForm() {
+            const container = document.getElementById('split-participants');
+            if (appData.people.length === 0) {
+                container.innerHTML = '<div class="text-center p-4"><a href="#" onclick="switchTab(\'people\')" class="text-blue-600 underline">Add People First</a></div>';
+                return;
+            }
+
+            container.innerHTML = appData.people.map((p, idx) => `
+                <div class="flex items-center justify-between bg-white p-2 border rounded shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="check-${idx}" class="participant-check w-4 h-4 text-blue-600" onchange="updateSplitTotal()">
+                        <label for="check-${idx}" class="text-gray-700 select-none cursor-pointer">${p}</label>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="percent-${idx}" placeholder="0" class="w-16 p-1 border rounded text-right text-sm" oninput="updateSplitTotal()">
+                        <span class="text-gray-500 text-sm">%</span>
+                    </div>
+                </div>
+            `).join('');
+            updateSplitTotal();
+        }
+
+        function updateSplitTotal() {
+            let total = 0;
+            appData.people.forEach((_, idx) => {
+                const check = document.getElementById(`check-${idx}`);
+                const input = document.getElementById(`percent-${idx}`);
+                if (check && check.checked) {
+                    input.disabled = false;
+                    input.classList.remove('bg-gray-100');
+                    total += parseFloat(input.value) || 0;
+                } else if(input) {
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100');
+                    input.value = '';
+                }
+            });
+            
+            const display = document.getElementById('split-total-check');
+            display.innerText = `Total: ${total}%`;
+            display.className = Math.abs(total - 100) < 0.1 ? "text-sm font-bold text-green-600" : "text-sm font-bold text-red-500";
+        }
+
+        function applySplitPreset(type) {
+            const checks = document.querySelectorAll('.participant-check');
+            let selectedIndices = [];
+            checks.forEach((c, i) => { if(c.checked) selectedIndices.push(i); });
+
+            if (selectedIndices.length === 0) { showStatus("Select people first.", true); return; }
+
+            if (type === 'even') {
+                const share = (100 / selectedIndices.length).toFixed(2);
+                selectedIndices.forEach(idx => document.getElementById(`percent-${idx}`).value = share);
+            } else if (type === '4060') {
+                if (selectedIndices.length !== 2) { showStatus("Select exactly 2 people.", true); return; }
+                document.getElementById(`percent-${selectedIndices[0]}`).value = 40;
+                document.getElementById(`percent-${selectedIndices[1]}`).value = 60;
+            }
+            updateSplitTotal();
+        }
+
+        function saveBill() {
+            const name = document.getElementById('new-bill-name').value;
+            const total = parseFloat(document.getElementById('new-bill-total').value);
+            const date = document.getElementById('new-bill-date').value;
+
+            let splitTotal = 0;
+            let splits = [];
+            
+            appData.people.forEach((p, idx) => {
+                const check = document.getElementById(`check-${idx}`);
+                const percentInput = document.getElementById(`percent-${idx}`);
+                if (check && check.checked) {
+                    const pct = parseFloat(percentInput.value) || 0;
+                    splitTotal += pct;
+                    const amount = (total * (pct / 100)).toFixed(2);
+                    splits.push({ name: p, percent: pct, amount: parseFloat(amount), paidAmount: 0 });
+                }
+            });
+
+            if (!name || isNaN(total) || total <= 0) { showStatus("Check bill details.", true); return; }
+            if (Math.abs(splitTotal - 100) > 0.1) { showStatus("Total must be 100%.", true); return; }
+
+            const newBill = { id: Date.now(), name, totalAmount: total, date, splits };
+            appData.bills.unshift(newBill);
+            saveData();
+            
+            document.getElementById('new-bill-name').value = '';
+            document.getElementById('new-bill-total').value = '';
+            showStatus("Bill Saved!");
+            switchTab('dashboard');
+        }
+
+        // --- DASHBOARD ---
+        function renderDashboard() {
+            const container = document.getElementById('bills-list');
+            if (appData.bills.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-gray-400">No bills yet.</div>';
+                return;
+            }
+
+            container.innerHTML = appData.bills.map(bill => {
+                const totalPaid = bill.splits.reduce((acc, s) => acc + s.paidAmount, 0);
+                const isFullyPaid = totalPaid >= bill.totalAmount - 0.1;
+                let statusColor = isFullyPaid ? 'bg-green-100 text-green-700' : (totalPaid > 0 ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700');
+                let statusText = isFullyPaid ? 'PAID' : (totalPaid > 0 ? 'PARTIAL' : 'PENDING');
+
+                return `
+                <div class="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
+                    <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition" onclick="toggleDetails(${bill.id})">
+                        <div>
+                            <h3 class="font-bold text-gray-800">${bill.name}</h3>
+                            <p class="text-xs text-gray-500">${bill.date}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-gray-900">$${bill.totalAmount.toFixed(2)}</p>
+                            <span class="text-xs px-2 py-0.5 rounded-full font-bold ${statusColor}">${statusText}</span>
+                        </div>
+                    </div>
+                    
+                    <div id="details-${bill.id}" class="hidden bg-gray-50 border-t border-gray-200 p-4">
+                        <table class="w-full text-sm mb-3">
+                            <tbody class="divide-y divide-gray-200">
+                                ${bill.splits.map((s, idx) => {
+                                    const owe = s.amount;
+                                    const paid = s.paidAmount;
+                                    const balance = paid - owe;
+                                    const isPaid = paid >= owe - 0.01;
+                                    
+                                    let rowColor = isPaid ? 'text-green-600' : (paid > 0 ? 'text-orange-600' : 'text-red-500');
+                                    let statusDetail = balance > 0.01 ? `<span class="text-green-600 font-bold text-xs">(+ $${balance.toFixed(2)} Credit)</span>` : `<span class="text-gray-400 font-normal">$${owe.toFixed(2)}</span>`;
+
+                                    return `
+                                    <tr>
+                                        <td class="py-3 font-medium">${s.name}</td>
+                                        <td class="py-3 text-right ${rowColor} font-bold">$${paid.toFixed(2)} / ${statusDetail}</td>
+                                        <td class="py-3 text-right">
+                                            <div class="flex justify-end items-center gap-2">
+                                                <input type="number" id="pay-input-${bill.id}-${idx}" placeholder="$" class="w-16 p-1 text-xs border rounded">
+                                                <button onclick="logPayment(${bill.id}, ${idx})" class="bg-blue-600 text-white px-2 py-1 rounded text-xs">Add</button>
+                                                <button onclick="markFull(${bill.id}, ${idx})" class="bg-green-600 text-white px-2 py-1 rounded text-xs">Full</button>
+                                            </div>
+                                        </td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                        <div class="text-right mt-2"><button onclick="deleteBill(${bill.id})" class="text-xs text-red-500 hover:underline">Delete Bill</button></div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        window.toggleDetails = (id) => { const el = document.getElementById(`details-${id}`); if(el) el.classList.toggle('hidden'); }
+        window.logPayment = (billId, splitIndex) => {
+            const input = document.getElementById(`pay-input-${billId}-${splitIndex}`);
+            const amount = parseFloat(input.value);
+            if (isNaN(amount) || amount <= 0) { showStatus("Invalid Amount.", true); return; }
+            const bill = appData.bills.find(b => b.id === billId);
+            if (bill) { bill.splits[splitIndex].paidAmount += amount; saveData(); input.value = ''; }
+        }
+        window.markFull = (billId, splitIndex) => {
+            const bill = appData.bills.find(b => b.id === billId);
+            if(bill) { bill.splits[splitIndex].paidAmount = bill.splits[splitIndex].amount; saveData(); }
+        }
+        window.deleteBill = (id) => {
+            // Replaced confirm with direct action
+            appData.bills = appData.bills.filter(b => b.id !== id);
+            saveData();
+            showStatus("Bill Deleted.");
+        }
+
+        // --- REPORTING ---
+        window.generateReport = () => {
+            const monthInput = document.getElementById('report-month').value;
+            if (!monthInput) return showStatus("Select a month first.", true);
+            
+            const filteredBills = appData.bills.filter(b => b.date.startsWith(monthInput));
+            if (filteredBills.length === 0) { showStatus("No data for this month.", true); return; }
+
+            let totalBilled = 0, totalCollected = 0, payerStats = {};
+            filteredBills.forEach(b => {
+                totalBilled += b.totalAmount;
+                b.splits.forEach(s => {
+                    totalCollected += s.paidAmount;
+                    if (!payerStats[s.name]) payerStats[s.name] = { billed: 0, paid: 0 };
+                    payerStats[s.name].billed += s.amount;
+                    payerStats[s.name].paid += s.paidAmount;
+                });
+            });
+
+            const netBalance = totalCollected - totalBilled;
+            let payerRowsPDF = [];
+            Object.keys(payerStats).forEach(name => {
+                const stats = payerStats[name];
+                const balance = stats.paid - stats.billed;
+                let balanceTextPDF = balance >= 0 ? `+${balance.toFixed(2)} (Cr)` : `${balance.toFixed(2)} (Due)`;
+                payerRowsPDF.push([name, `$${stats.billed.toFixed(2)}`, `$${stats.paid.toFixed(2)}`, balanceTextPDF]);
+            });
+
+            let billRowsPDF = [];
+            filteredBills.forEach(b => {
+                const bPaid = b.splits.reduce((acc, s) => acc + s.paidAmount, 0);
+                const status = bPaid >= b.totalAmount - 0.1 ? 'Paid' : (bPaid > 0 ? 'Partial' : 'Pending');
+                billRowsPDF.push([b.date, b.name, `$${b.totalAmount.toFixed(2)}`, `$${bPaid.toFixed(2)}`, status]);
+            });
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFillColor(37, 99, 235); doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("Monthly Financial Summary", 105, 18, null, null, "center");
+            doc.setFontSize(14); doc.text(`Period: ${monthInput}`, 105, 28, null, null, "center");
+            
+            doc.setTextColor(0,0,0); doc.setFontSize(12); doc.text("Summary:", 14, 50);
+            doc.autoTable({ startY: 55, head: [['Billed', 'Collected', 'Balance']], body: [[`$${totalBilled.toFixed(2)}`, `$${totalCollected.toFixed(2)}`, `$${netBalance.toFixed(2)}`]], theme: 'grid' });
+            
+            doc.text("Payer Status:", 14, doc.lastAutoTable.finalY + 15);
+            doc.autoTable({ startY: doc.lastAutoTable.finalY + 20, head: [['Name', 'Share', 'Paid', 'Balance']], body: payerRowsPDF, theme: 'striped' });
+            
+            doc.text("Bills:", 14, doc.lastAutoTable.finalY + 15);
+            doc.autoTable({ startY: doc.lastAutoTable.finalY + 20, head: [['Date', 'Bill', 'Total', 'Paid', 'Status']], body: billRowsPDF, theme: 'striped' });
+            doc.save(`Summary_${monthInput}.pdf`);
+            showStatus("PDF Downloaded!");
+        }
+    </script>
+</body>
+</html>
