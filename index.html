@@ -148,7 +148,16 @@
                              Download File
                         </button>
                     </div>
+                    
+                    <div class="mt-3">
+                        <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(this)">
+                        <button onclick="document.getElementById('import-file').click()" class="w-full bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded font-medium hover:bg-gray-100 text-sm">
+                             <i class="fa-solid fa-upload mr-2"></i>Upload Backup File
+                        </button>
+                    </div>
+
                     <div class="mt-4 pt-4 border-t border-gray-200">
+                        <p class="text-xs text-gray-500 mb-1">Or paste data code:</p>
                         <div class="flex gap-2">
                             <input id="paste-import-area" placeholder="Paste data here..." class="flex-1 p-2 text-xs border rounded">
                             <button onclick="importFromText()" class="bg-gray-800 text-white px-3 py-1 rounded text-xs font-bold">Load</button>
@@ -451,6 +460,34 @@
                 });
             });
 
+            // 3. Calculate ALL TIME Payer Status (Cumulative Debt/Credit)
+            let payerStats = {};
+            appData.bills.forEach(b => {
+                b.splits.forEach(s => {
+                    const name = s.name || "Unknown";
+                    if (!payerStats[name]) payerStats[name] = { billed: 0, paid: 0 };
+                    payerStats[name].billed += s.amount;
+                    payerStats[name].paid += getPaidTotal(s);
+                });
+            });
+
+            let payerRows = [];
+            Object.keys(payerStats).forEach(name => {
+                const stats = payerStats[name];
+                const balance = stats.paid - stats.billed;
+                let balanceStr = "";
+                
+                if (balance > 0.005) {
+                    balanceStr = `+ $${balance.toFixed(2)} (Credit)`;
+                } else if (balance < -0.005) {
+                    balanceStr = `- $${Math.abs(balance).toFixed(2)} (Pending)`;
+                } else {
+                    balanceStr = "Settled";
+                }
+
+                payerRows.push([name, `$${stats.billed.toFixed(2)}`, `$${stats.paid.toFixed(2)}`, balanceStr]);
+            });
+
             if (type === 'month') reportTitle = `Cash Flow: ${monthInput}`;
             if (type === 'all') reportTitle = "All Time Cash Flow";
 
@@ -495,6 +532,16 @@
                 body: collectedRows, 
                 theme: 'striped',
                 headStyles: { fillColor: [22, 163, 74] } // Green
+            });
+
+            // Payer Status Table (All Time)
+            doc.text("Current Payer Status (All Time History):", 14, doc.lastAutoTable.finalY + 15);
+            doc.autoTable({ 
+                startY: doc.lastAutoTable.finalY + 20, 
+                head: [['Name', 'Total Billed', 'Total Paid', 'Current Balance']], 
+                body: payerRows, 
+                theme: 'striped',
+                headStyles: { fillColor: [79, 70, 229] } // Indigo
             });
 
             doc.save(`CashFlow_${type}.pdf`);
